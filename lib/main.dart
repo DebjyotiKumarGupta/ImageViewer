@@ -1,10 +1,4 @@
-import 'dart:convert';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:get/get.dart';
-import 'package:newapp/view-models/controller/image-controller.dart';
-import 'package:newapp/view-models/response.dart';
 import 'package:newapp/view/myHomePage.dart';
-import 'package:photo_view/photo_view.dart';
 import 'package:flutter/material.dart';
 
 void main() {
@@ -18,6 +12,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'Flutter Demo',
       theme: ThemeData(
         // This is the theme of your application.

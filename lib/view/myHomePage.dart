@@ -1,10 +1,13 @@
-import 'dart:convert';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'dart:async';
+
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
+import 'package:newapp/models/image-model.dart';
 import 'package:newapp/view-models/controller/image-controller.dart';
 import 'package:newapp/view-models/response.dart';
-import 'package:photo_view/photo_view.dart';
 import 'package:flutter/material.dart';
+import 'package:newapp/view/widgets/imageWidget.dart';
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key, required this.title});
@@ -25,7 +28,7 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  ImageController _imageController = Get.put(ImageController());
+  final ImageController _imageController = Get.put(ImageController());
   final _scrollController = ScrollController();
 
   @override
@@ -36,57 +39,36 @@ class _MyHomePageState extends State<MyHomePage> {
       _scrollController.addListener(() async {
         if (_scrollController.position.pixels ==
             _scrollController.position.maxScrollExtent) {
-          await _imageController.loadMore();
+          _imageController.page.value++;
+          await _imageController.loadMore(
+              category: _imageController.searchController.value.text,
+              page: _imageController.page.value);
         }
       });
-      await _imageController.loadMore();
+      await _imageController.loadMore(
+          category: _imageController.searchController.value.text,
+          page: _imageController.page.value);
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    Widget returnContainer(String url) {
-      return Container(
-          padding: const EdgeInsets.all(5),
-          decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(15),
-              color: Colors.deepPurple),
-          child: InkWell(
-              onTap: () {
-                showDialog(
-                  context: context,
-                  useSafeArea: false,
-                  barrierDismissible: true,
-                  // barrierColor: AppColor.blackColor.withOpacity(0.7),
-                  builder: (BuildContext context) => Center(
-                    child: Container(
-                      height: MediaQuery.of(context).size.height * 0.62,
-                      width: double.maxFinite,
-                      // color: AppColor.blackColor,
-                      child: PhotoView(
-                        imageProvider: NetworkImage(
-                          url,
-                        ),
-                        minScale: PhotoViewComputedScale.contained,
-                        maxScale: PhotoViewComputedScale.covered * 2,
-                        backgroundDecoration: BoxDecoration(
-                          color: Colors.black,
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              },
-              child: CachedNetworkImage(
-                  // height: 100,
-                  // width: 100,
-                  fit: BoxFit.cover,
-                  imageUrl: url,
-                  placeholder: (context, url) => CircleAvatar(
-                        // specify your desired height
-                        child: CircularProgressIndicator(),
-                      ),
-                  errorWidget: (context, url, error) => Icon(Icons.error))));
+// Debouncing logic
+    Timer? _debounce;
+
+    Future<void> _onSearchChanged() async {
+      if (_debounce?.isActive ?? false) _debounce?.cancel();
+      _debounce = Timer(const Duration(milliseconds: 500), () async {
+        _imageController.imageData.value.hits = null;
+        await _imageController.loadMore(
+            category: _imageController.searchController.value.text, page: 1);
+      });
+    }
+
+    @override
+    void dispose() {
+      _debounce?.cancel();
+      super.dispose();
     }
 
     // This method is rerun every time setState is called, for instance as done
@@ -96,27 +78,88 @@ class _MyHomePageState extends State<MyHomePage> {
     // fast, so that you can just rebuild anything that needs updating rather
     // than having to individually change instances of widgets.
     return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text("Expert's Choice "),
+      appBar: PreferredSize(
+        preferredSize: Size.fromHeight(80.0), // Set the AppBar height
+        child: ClipRRect(
+          borderRadius: BorderRadius.only(
+            bottomRight: Radius.circular(20), // Round the bottom right corner
+            bottomLeft: Radius.circular(20), // Round the bottom left corner
+          ),
+          child: Container(
+            color: Theme.of(context).colorScheme.inversePrimary,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Text("Expert's Choice"),
+                Container(
+                  margin: EdgeInsets.all(10),
+                  width: MediaQuery.of(context).size.width * 0.4,
+                  child: TextFormField(
+                    controller: _imageController.searchController.value,
+                    onChanged: (val) {
+                      _onSearchChanged();
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Search...',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(30),
+                        borderSide: BorderSide.none,
+                      ),
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 20),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
       body: Obx(
-        () => GridView.builder(
-            controller: _scrollController,
-            itemCount: _imageController.items.length,
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 4,
-              childAspectRatio:
-                  1.0, // This will force the children Widgets to retain their intrinsic aspect ratio
-            ),
-            itemBuilder: (context, index) {
-              return returnContainer(_imageController.items[index]);
-            }),
+        () => (_imageController.imageData.value.hits == null &&
+                _imageController.rxStatusValue.value == Status.LOADING)
+            ? Center(child: CircularProgressIndicator())
+            : Column(
+                children: [
+                  _imageController.imageData.value.hits!.isNotEmpty
+                      ? Expanded(
+                          child: GridView.builder(
+                            controller: _scrollController,
+                            // itemCount: 1,
+                            itemCount:
+                                _imageController.imageData.value.hits!.length,
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 4,
+                              childAspectRatio:
+                                  1.0, // This will force the children Widgets to retain their intrinsic aspect ratio
+                            ),
+                            itemBuilder: (context, index) {
+                              Hit imageInfo =
+                                  _imageController.imageData.value.hits![index];
+                              return Padding(
+                                  padding: const EdgeInsets.all(8.0),
+                                  child: ImageWidget(
+                                      likes: imageInfo.likes!,
+                                      views: imageInfo.views!,
+                                      url: imageInfo.largeImageUrl!));
+                            },
+                          ),
+                        )
+                      : const Center(
+                          child: Text(
+                            "No Image Found",
+                            style: TextStyle(color: Colors.black),
+                          ),
+                        ),
+                  if (_imageController.rxStatusValue.value == Status.LOADING)
+                    const Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                ],
+              ),
       ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }

@@ -4,8 +4,10 @@ import 'package:newapp/view-models/networks/network-api-services.dart';
 
 class ImageServices {
   final _api = NetworkAPiServices();
-  Future<dynamic> getImagesServices() async {
-    final response = await _api.getApi(AppUrl.getImages);
-    return response;
+  Future<ImageData> getImagesServices(
+      {required String q, int perPage = 10, required int page}) async {
+    final response = await _api
+        .getApi("${AppUrl.imageUrl}&q=$q&per_page=$perPage&page=$page");
+    return ImageData.fromJson(response);
   }
 }

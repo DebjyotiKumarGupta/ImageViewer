@@ -1,5 +1,6 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+// ignore_for_file: file_names
+
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:newapp/models/image-model.dart';
 import 'package:newapp/view-models/response.dart';
@@ -8,28 +9,35 @@ import 'package:newapp/view-models/services/image-service.dart';
 class ImageController extends GetxController {
   final _api = ImageServices();
   RxBool loading = false.obs;
+  RxInt page = 1.obs;
   Rx<Status> rxStatusValue = Status.LOADING.obs;
   setRxStatusValue(Status statusVal) {
     rxStatusValue.value = statusVal;
   }
 
-  RxList<ImagesModel> imagesData = <ImagesModel>[].obs;
-  void setImageData(ImagesModel data) => imagesData.add(data);
+  Rx<TextEditingController> searchController = TextEditingController().obs;
 
-  RxList items = <String>[].obs;
+  Rx<ImageData> imageData = ImageData().obs;
+  void setImageDataAgain(ImageData data) =>
+      imageData.value.hits?.addAll(data.hits!);
+  void setImageDataInit(ImageData data) => imageData.value = data;
 
-  Future<void> loadMore() async {
+  RxString lastCategory = "".obs;
+
+  Future<void> loadMore({required String category, required int page}) async {
     rxStatusValue.value = Status.LOADING;
     loading.value = true;
     try {
-      final response = await _api.getImagesServices();
-      // setImageData(response);
-      print("data got set");
-      List<String> newItems = (response as List)
-          .map((data) => data['download_url'] as String)
-          .toList();
+      ImageData response = await _api.getImagesServices(
+          q: category.isEmpty ? "flower" : category, page: page);
 
-      items.addAll(newItems);
+      if (lastCategory.value == category && imageData.value.hits != null) {
+        setImageDataAgain(response);
+      } else {
+        lastCategory.value = category;
+        setImageDataInit(response);
+      }
+
       rxStatusValue.value = Status.COMPLETED;
     } catch (e) {
       rxStatusValue.value = Status.ERROR;
